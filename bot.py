@@ -4,55 +4,65 @@ import os
 
 app = FastAPI()
 
-# ===== CONFIG =====
 VERIFY_TOKEN = "FarmersBot"
 
-ACCESS_TOKEN = "EAAMq6oZAHy4kBQ1CZCWbbwSct6fcHvenVbSMrI57ipnJPhqeBZBwkB2zToTuZAQOAM6gbeXa1ONYrUbtFZCzpOWlInedUt9ZCFr0N1AFqLV8MRgFhQDfrT6uHcWzA5bjhjQHjk80IlZB4reXZAlZAYqZBGkuxZBl6TwO9iayrZAA9Q5Dujj4bytAdb8DrMTajGch7CbBowPgFqdAu9ADGOorgRsH3LlsftSxGFXzZCg0okPnd4HgWlqgZCwYoTbZAk7qOcB4xawriNw2ts79MW0CZCQbvhUC"
+ACCESS_TOKEN = "EAAMq6oZAHy4kBQzYdaPmHNZA4CdvYWuWisYnW4zGkmu4PG8RDyNLIhTM70IR3e6DlDxpid83gLvRThHy5oZBs7qEt5ETiuBNrea3QZCqicGc6volY3FCeZBZBMsAqtzhw9fOZCclgPOVPSSBjK8rLDZC0NXbRFWnJaQjs0R802hpZBZAUCcLIw2QZC50KolmVCGVZBmKX6sVpQ65WZCdW9EzdjFL82b05B6XV9jZCI1ZA0ZCzdflDWv41halwscHomP9XWbS8ocZBEo0q98YXYP51y7ZCVnaCP"
 PHONE_NUMBER_ID = "1062500773611327"
 
-# ==================
+# Create images folder
+os.makedirs("images", exist_ok=True)
 
 
-# WEBHOOK VERIFICATION
+# Webhook verification
 @app.get("/webhook")
 async def verify(request: Request):
 
     params = request.query_params
 
-    mode = params.get("hub.mode")
-    challenge = params.get("hub.challenge")
-    token = params.get("hub.verify_token")
+    if params.get("hub.verify_token") == VERIFY_TOKEN:
+        return int(params.get("hub.challenge"))
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return int(challenge)
-
-    return {"error": "Verification failed"}
+    return "Verification failed"
 
 
-# RECEIVE MESSAGES
+# Receive messages
 @app.post("/webhook")
 async def receive_message(request: Request):
 
     data = await request.json()
 
-    print("Incoming message:", data)
+    print("Incoming:", data)
 
     try:
         value = data["entry"][0]["changes"][0]["value"]
 
-        if "messages" in value:
+        if "messages" not in value:
+            return {"status": "ok"}
 
-            message = value["messages"][0]
+        message = value["messages"][0]
+        sender = message["from"]
+        msg_type = message["type"]
 
-            sender = message["from"]
+        # TEXT MESSAGE
+        if msg_type == "text":
+            text = message["text"]["body"]
 
-            if message["type"] == "text":
-                text = message["text"]["body"]
+            print("Text:", text)
 
-                print("Sender:", sender)
-                print("Text:", text)
+            send_whatsapp_message(sender, f"You said: {text}")
 
-                send_whatsapp_message(sender, f"You said: {text}")
+        # IMAGE MESSAGE
+        if msg_type == "image":
+
+            media_id = message["image"]["id"]
+
+            print("Image media id:", media_id)
+
+            image_path = download_image(media_id)
+
+            print("Saved image:", image_path)
+
+            send_whatsapp_message(sender, "Image received 📷. Processing soon.")
 
     except Exception as e:
         print("Error:", e)
@@ -60,7 +70,32 @@ async def receive_message(request: Request):
     return {"status": "ok"}
 
 
-# SEND WHATSAPP MESSAGE
+# Download image from WhatsApp servers
+def download_image(media_id):
+
+    url = f"https://graph.facebook.com/v19.0/{media_id}"
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
+    }
+
+    # Get media URL
+    response = requests.get(url, headers=headers).json()
+
+    media_url = response["url"]
+
+    # Download file
+    image_response = requests.get(media_url, headers=headers)
+
+    file_path = f"images/{media_id}.jpg"
+
+    with open(file_path, "wb") as f:
+        f.write(image_response.content)
+
+    return file_path
+
+
+# Send message back
 def send_whatsapp_message(to, text):
 
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
