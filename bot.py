@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 import requests
 import os
-
+from disease_detector import detect_disease
 app = FastAPI()
 
 # ===== CONFIG =====
@@ -73,7 +73,14 @@ async def receive_message(request: Request):
 
             print("Saved image:", image_path)
 
+
+            disease = detect_disease(file_path)
+
+            reply = f"Disease detected: {disease}"
+            
             send_whatsapp_message(sender, "Image received 📷. Processing soon.")
+
+            send_whatsapp_message(sender, reply)
 
 
     except Exception as e:
