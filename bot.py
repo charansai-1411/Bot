@@ -1,15 +1,16 @@
 from fastapi import FastAPI, Request
 import requests
 import os
-from disease_detector import detect_disease
 
 app = FastAPI()
 
 # ===== CONFIG =====
 VERIFY_TOKEN = "FarmersBot"
 
-ACCESS_TOKEN = "YOUR_ACCESS_TOKEN"
+ACCESS_TOKEN = "EAAMq6oZAHy4kBQ4NZCvswTaJBfARoZAHrX9g1ZBciwGRuMQgut3H3a8PYFncNx4q0k0TIIGVWujZCxyb1WMIhoXrk4SL4wTWHCAZAbKaqvORQ52CgXh6l4Wdd0vCAoLHenbhWUm2oEpwgiErJ23d5lwASWe6FA0k9vxIjjIHK9lOASXGPJDOa1sHpHUsqrVTEuOY5oifcVZAYp2SH08JdKIOb38JIpvuQ1tqUDcNMOaLLAtgKyFTGBnTPLOA2ZB6ZAifsUbLzO1rfNwG1AiXtzfxy"
 PHONE_NUMBER_ID = "1006836429183653"
+
+AI_SERVICE_URL = "https://your-ai-service-url/predict"   # optional AI server
 # ==================
 
 # create folder for images
@@ -60,7 +61,7 @@ async def receive_message(request: Request):
 
             send_whatsapp_message(
                 sender,
-                f"{text}! Thanks for messaging FarmersBot. This Bot is created by Charan Sai."
+                f"{text}! Thanks for messaging FarmersBot 🌱"
             )
 
 
@@ -72,16 +73,14 @@ async def receive_message(request: Request):
 
             print("Image URL:", image_url)
 
-            # send quick reply
-            send_whatsapp_message(sender, "📷 Image received. Analyzing plant disease...")
+            send_whatsapp_message(sender, "📷 Image received. Analyzing...")
 
-            # download image
             image_path = download_image(image_url, media_id)
 
             print("Saved image:", image_path)
 
-            # run AI detection
-            disease = detect_disease(image_path)
+            # call AI service
+            disease = call_ai_service(image_path)
 
             reply = f"🌿 Disease detected: {disease}"
 
@@ -109,6 +108,26 @@ def download_image(image_url, media_id):
         f.write(response.content)
 
     return file_path
+
+
+# ===== CALL AI SERVICE =====
+def call_ai_service(image_path):
+
+    try:
+
+        files = {"file": open(image_path, "rb")}
+
+        response = requests.post(AI_SERVICE_URL, files=files)
+
+        result = response.json()
+
+        return result.get("disease", "Unknown disease")
+
+    except Exception as e:
+
+        print("AI service error:", e)
+
+        return "Unable to analyze image"
 
 
 # ===== SEND MESSAGE =====
