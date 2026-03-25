@@ -7,13 +7,14 @@ app = FastAPI()
 # ===== CONFIG =====
 VERIFY_TOKEN = "FarmersBot"
 
-ACCESS_TOKEN = "EAAMq6oZAHy4kBQ4NZCvswTaJBfARoZAHrX9g1ZBciwGRuMQgut3H3a8PYFncNx4q0k0TIIGVWujZCxyb1WMIhoXrk4SL4wTWHCAZAbKaqvORQ52CgXh6l4Wdd0vCAoLHenbhWUm2oEpwgiErJ23d5lwASWe6FA0k9vxIjjIHK9lOASXGPJDOa1sHpHUsqrVTEuOY5oifcVZAYp2SH08JdKIOb38JIpvuQ1tqUDcNMOaLLAtgKyFTGBnTPLOA2ZB6ZAifsUbLzO1rfNwG1AiXtzfxy"
+ACCESS_TOKEN = "EAAMq6oZAHy4kBRN4zWCwkdFOPA8uw1p6DsCo1othOLVHYYQvkZCPCO0XPXCthZCaXJPbEbbEWZB6q0tjO6rDGzZC4yoTPZBONO0h1ydo1crJvqdedNfiFpG4camYwJ0FZBwbf0QoOFWJ6s5HYWJR0jN0GUbcnUovgkMCjEBADZCxwOX1qm3WR3ivjM2gmkt5X2JZAHZBzAAfMOFAYY6JTZCGKmm49wevGFBc4idzVRyEaGvJ3BIFXn9gLfE7eSWUhKyzbLX9QR0mdOKmLY5MYSH08iwuAZDZD"
 PHONE_NUMBER_ID = "1006836429183653"
 
-AI_SERVICE_URL = "https://your-ai-service-url/predict"   # optional AI server
+# 🔥 IMPORTANT: local AI server
+AI_SERVICE_URL = "http://127.0.0.1:8000/predict"
+
 # ==================
 
-# create folder for images
 os.makedirs("images", exist_ok=True)
 
 
@@ -34,14 +35,11 @@ async def verify(request: Request):
 async def receive_message(request: Request):
 
     data = await request.json()
-
     print("Incoming message:", data)
 
     try:
-
         value = data["entry"][0]["changes"][0]["value"]
 
-        # ignore status updates
         if "messages" not in value:
             return {"status": "ok"}
 
@@ -52,45 +50,55 @@ async def receive_message(request: Request):
 
         print("Sender:", sender)
 
-        # ---------- TEXT MESSAGE ----------
+        # ---------- TEXT ----------
         if msg_type == "text":
 
             text = message["text"]["body"]
-
-            print("Text:", text)
 
             send_whatsapp_message(
                 sender,
                 f"{text}! Thanks for messaging FarmersBot 🌱"
             )
 
+        # ---------- IMAGE ----------
+        elif msg_type == "image":
 
-        # ---------- IMAGE MESSAGE ----------
-        if msg_type == "image":
-
-            image_url = message["image"]["url"]
             media_id = message["image"]["id"]
-
-            print("Image URL:", image_url)
 
             send_whatsapp_message(sender, "📷 Image received. Analyzing...")
 
+            # 🔥 STEP 1: get image URL properly
+            image_url = get_image_url(media_id)
+
+            # 🔥 STEP 2: download image
             image_path = download_image(image_url, media_id)
 
             print("Saved image:", image_path)
 
-            # call AI service
+            # 🔥 STEP 3: call AI
             disease = call_ai_service(image_path)
 
             reply = f"🌿 Disease detected: {disease}"
 
             send_whatsapp_message(sender, reply)
 
-
     except Exception as e:
         print("Error:", e)
 
     return {"status": "ok"}
+
+
+# ===== GET IMAGE URL =====
+def get_image_url(media_id):
+
+    url = f"https://graph.facebook.com/v19.0/{media_id}"
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
+    }
+
+    response = requests.get(url, headers=headers)
+    return response.json()["url"]
 
 
 # ===== DOWNLOAD IMAGE =====
@@ -114,19 +122,18 @@ def download_image(image_url, media_id):
 def call_ai_service(image_path):
 
     try:
+        with open(image_path, "rb") as img:
 
-        files = {"file": open(image_path, "rb")}
+            files = {"file": img}
 
-        response = requests.post(AI_SERVICE_URL, files=files)
+            response = requests.post(AI_SERVICE_URL, files=files)
 
-        result = response.json()
+            result = response.json()
 
-        return result.get("disease", "Unknown disease")
+            return result.get("disease", "Unknown disease")
 
     except Exception as e:
-
-        print("AI service error:", e)
-
+        print("AI error:", e)
         return "Unable to analyze image"
 
 
