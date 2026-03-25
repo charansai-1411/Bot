@@ -11,7 +11,7 @@ ACCESS_TOKEN = "EAAMq6oZAHy4kBRN4zWCwkdFOPA8uw1p6DsCo1othOLVHYYQvkZCPCO0XPXCthZC
 PHONE_NUMBER_ID = "1006836429183653"
 
 # 🔥 IMPORTANT: local AI server
-AI_SERVICE_URL = "http://0.0.0.0:8000/predict"
+AI_SERVICE_URL = "http://127.0.0.1:8000/predict"
 
 # ==================
 
