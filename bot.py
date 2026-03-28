@@ -126,7 +126,11 @@ def call_ai_service(image_path):
 
             files = {"file": img}
 
-            response = requests.post(AI_SERVICE_URL, files=files)
+            response = requests.post(AI_SERVICE_URL, files=files, timeout=60)
+
+            if response.status_code != 200:
+                print("AI service error:", response.status_code, response.text)
+                return "AI service unavailable"
 
             result = response.json()
 
