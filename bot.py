@@ -93,7 +93,7 @@ def ask_gemini_text(user_message):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.0-flash-lite",
             contents=user_message,
             config=types.GenerateContentConfig(
                 system_instruction="You are FarmersBot 🌱, a helpful agricultural assistant on WhatsApp. Answer questions about farming, crops, diseases, and agriculture. Keep responses concise and mobile-friendly (under 500 characters when possible). Use emojis to make responses engaging.",
@@ -114,7 +114,7 @@ def ask_gemini_image(image_path, prompt):
         uploaded_file = client.files.upload(file=image_path)
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.0-flash-lite",
             contents=[
                 uploaded_file,
                 prompt,
