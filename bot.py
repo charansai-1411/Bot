@@ -1,21 +1,26 @@
 from fastapi import FastAPI, Request
 import requests
 import os
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+load_dotenv()
 
 app = FastAPI()
 
-# ===== CONFIG =====
-VERIFY_TOKEN = "FarmersBot"
-
-ACCESS_TOKEN = "EAAMq6oZAHy4kBRMDAZBVwZCYSQlhLBzljfFc31ZAhoHO0j3JzuYKTjLHprLMiGNO8RW00Qz6BTZC7HHE7cHT9Lf8Cde1Yaa3KFx0UhzyzZBfHU6BziEOtmj4vLOjdCFcqnuTFGnEAzV0aaZBVOCZCZC6lZBn1zFugPoZCsPfwvh0eIxJAR7ZBlMJyka81xVGROCdxTYvcodLw9sa8MMsGwtIUJ5WIwieJ0PoxIIb1AIKqeVx55jNW6JGuMZB62YJpi8Jbjf8DZAeZAcu5KxtsUmC47q8cQV"
-PHONE_NUMBER_ID = "1006836429183653"
-
-# 🔥 IMPORTANT: local AI server
-AI_SERVICE_URL = "https://farmers-ai-1.onrender.com/predict"
+# ===== CONFIG (loaded from environment variables) =====
+VERIFY_TOKEN = os.environ["VERIFY_TOKEN"]
+ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
+PHONE_NUMBER_ID = os.environ["PHONE_NUMBER_ID"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
 # ==================
 
 os.makedirs("images", exist_ok=True)
+
+# Initialize Gemini client
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 # ===== WEBHOOK VERIFICATION =====
@@ -55,37 +60,74 @@ async def receive_message(request: Request):
 
             text = message["text"]["body"]
 
-            send_whatsapp_message(
-                sender,
-                f"{text}! Thanks for messaging FarmersBot 🌱"
-            )
+            reply = ask_gemini_text(text)
+            send_whatsapp_message(sender, reply)
 
         # ---------- IMAGE ----------
         elif msg_type == "image":
 
             media_id = message["image"]["id"]
+            caption = message["image"].get("caption", "What disease does this plant have? Identify the disease and suggest treatment.")
 
-            send_whatsapp_message(sender, "📷 Image received. Analyzing...")
+            send_whatsapp_message(sender, "📷 Image received. Analyzing with AI...")
 
-            # 🔥 STEP 1: get image URL properly
+            # Step 1: get image URL
             image_url = get_image_url(media_id)
 
-            # 🔥 STEP 2: download image
+            # Step 2: download image
             image_path = download_image(image_url, media_id)
-
             print("Saved image:", image_path)
 
-            # 🔥 STEP 3: call AI
-            disease = call_ai_service(image_path)
-
-            reply = f"🌿 Disease detected: {disease}"
-
+            # Step 3: analyze with Gemini
+            reply = ask_gemini_image(image_path, caption)
             send_whatsapp_message(sender, reply)
 
     except Exception as e:
         print("Error:", e)
 
     return {"status": "ok"}
+
+
+# ===== GEMINI: TEXT =====
+def ask_gemini_text(user_message):
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction="You are FarmersBot 🌱, a helpful agricultural assistant on WhatsApp. Answer questions about farming, crops, diseases, and agriculture. Keep responses concise and mobile-friendly (under 500 characters when possible). Use emojis to make responses engaging.",
+            ),
+        )
+        return response.text
+
+    except Exception as e:
+        print("Gemini text error:", e)
+        return "Sorry, I couldn't process your message right now. Please try again! 🌱"
+
+
+# ===== GEMINI: IMAGE =====
+def ask_gemini_image(image_path, prompt):
+
+    try:
+        # Upload image to Gemini
+        uploaded_file = client.files.upload(file=image_path)
+
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                uploaded_file,
+                prompt,
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction="You are FarmersBot 🌱, an expert agricultural AI on WhatsApp. When analyzing plant images: 1) Identify the plant/crop, 2) Detect any disease or pest, 3) Suggest treatment or remedies. Keep responses concise and mobile-friendly. Use emojis.",
+            ),
+        )
+        return response.text
+
+    except Exception as e:
+        print("Gemini image error:", e)
+        return "Sorry, I couldn't analyze the image right now. Please try again! 📷"
 
 
 # ===== GET IMAGE URL =====
@@ -116,29 +158,6 @@ def download_image(image_url, media_id):
         f.write(response.content)
 
     return file_path
-
-
-# ===== CALL AI SERVICE =====
-def call_ai_service(image_path):
-
-    try:
-        with open(image_path, "rb") as img:
-
-            files = {"file": img}
-
-            response = requests.post(AI_SERVICE_URL, files=files, timeout=60)
-
-            if response.status_code != 200:
-                print("AI service error:", response.status_code, response.text)
-                return "AI service unavailable"
-
-            result = response.json()
-
-            return result.get("disease", "Unknown disease")
-
-    except Exception as e:
-        print("AI error:", e)
-        return "Unable to analyze image"
 
 
 # ===== SEND MESSAGE =====
